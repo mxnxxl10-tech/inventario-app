@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inicio de Sesión - Sistema de Inventario</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div class="login-wrapper">
+        <main class="login-card" role="main" aria-labelledby="main-title">
+            <div class="brand">
+                <div class="logo" aria-hidden="true">
+                    <img src="assets/logo.png" alt="Logo" onerror="this.style.display='none'">
+                </div>
+                <div>
+                        <div class="company">Recsolog</div>
+                    <div class="subtitle">Sistema de Inventario</div>
+                </div>
+            </div>
+
+            <h1 id="main-title">Inicio de sesión</h1>
+            <p class="subtitle muted">Acceder como usuario</p>
+
+            <form id="login-form" novalidate>
+                <label for="username" class="muted">Usuario</label>
+                <input type="text" id="username" name="username" placeholder="Usuario" required aria-required="true">
+
+                <label for="password" class="muted">Contraseña</label>
+                <input type="password" id="password" name="password" placeholder="Contraseña" required aria-required="true">
+
+                <button type="submit" class="btn btn-primary btn-centered" aria-label="Iniciar sesión">Iniciar sesión</button>
+            </form>
+
+            <p class="footer-note">Recsolog</p>
+        </main>
+    </div>
+
+    <script src="scripts/app.js"></script>
+    <script>
+        document.getElementById('login-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            authenticateUser(username, password); // Llama a la función en app.js
+        });
+    </script>
+</body>
+</html>

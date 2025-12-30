@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2. Selección de Cuenta</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <main class="card card--small">
+            <div class="brand">
+                <div class="logo" aria-hidden="true">
+                    <img src="assets/logo.png" alt="Logo" onerror="this.style.display='none'">
+                </div>
+                <div>
+                    <div class="company">Recsolog</div>
+                    <div class="subtitle">Seleccionar Cuenta de Conteo</div>
+                </div>
+            </div>
+
+            <h1 id="main-title">Seleccionar Cuenta de Conteo</h1>
+            <p style="text-align: center;">Elige la Bodega y la Cuenta a inventariar:</p>
+
+            <select id="bodega-select" style="width: 100%; padding: 10px; margin-bottom: 10px;">
+                <option value="">Seleccionar Bodega</option>
+                <option value="BOD1">Bodega 1</option>
+                <option value="BOD2">Bodega 2</option>
+                <option value="BOD3">Bodega 3</option>
+            </select>
+            
+            <select id="cuenta-select" style="width: 100%; padding: 10px; margin-bottom: 15px;" disabled>
+                <option value="">Seleccionar Cuenta</option>
+            </select>
+
+            <button id="iniciar-conteo-btn" class="btn btn-primary btn-centered" disabled>Iniciar Conteo</button>
+            
+            <div class="navigation-buttons">
+                 <button onclick="window.location.href='1-login.html'" class="btn btn-secondary">Cerrar Sesión</button>
+            </div>
+        </main>
+    </div>
+
+    <script src="scripts/app.js"></script>
+    <script>
+        // ----------------------------------------------------------------------
+        // DEFINICIÓN DE LA JERARQUÍA COMPLETA DE CUENTAS (LISTADO LINEAL)
+        // ----------------------------------------------------------------------
+        const cuentas_por_bodega = {
+            'BOD1': [
+                'ODELLA', 'Filorga', 'Odella', 'MULTICUENTAS', 'Montana', 
+                'SVR', 'Zaneo', 'Liverpool'
+            ],
+            'BOD2': [
+                'Shacman'
+            ],
+            'BOD3': [
+                'Melonn', 'Gama y Empaque', 'Lexmarck', 'Food Proteins', 'Latin Food'
+            ]
+        };
+
+        const bodegaSelect = document.getElementById('bodega-select');
+        const cuentaSelect = document.getElementById('cuenta-select');
+        const iniciarBtn = document.getElementById('iniciar-conteo-btn');
+
+        cuentaSelect.disabled = true;
+        iniciarBtn.disabled = true;
+
+        bodegaSelect.addEventListener('change', function() {
+            const bodegaId = this.value;
+            cuentaSelect.innerHTML = '<option value="">-- Seleccionar Cuenta --</option>';
+            cuentaSelect.disabled = true;
+            iniciarBtn.disabled = true;
+
+            if (bodegaId && cuentas_por_bodega[bodegaId]) {
+                const cuentas = cuentas_por_bodega[bodegaId];
+                
+                cuentas.forEach(cuentaNombre => {
+                    cuentaSelect.innerHTML += `<option value="${bodegaId}_${cuentaNombre}">${cuentaNombre}</option>`;
+                });
+
+                cuentaSelect.disabled = false;
+            }
+        });
+
+        cuentaSelect.addEventListener('change', function() {
+            iniciarBtn.disabled = !this.value;
+        });
+
+        iniciarBtn.addEventListener('click', function() {
+            const seleccion = cuentaSelect.value;
+            const bodegaNombre = bodegaSelect.options[bodegaSelect.selectedIndex].text;
+            
+            if (seleccion) {
+                const cuentaFinal = seleccion.split('_')[1];
+
+                // Guardar la selección en localStorage
+                localStorage.setItem('conteo_context', JSON.stringify({
+                    bodega: bodegaNombre,
+                    cuenta: cuentaFinal,
+                    formato: 'DETALLE' 
+                }));
+                
+                // REDIRECCIÓN CLAVE: Va a la PANTALLA 3: Validación de Ubicación
+                window.location.href = '3-validacion-ubicacion.html';
+            }
+        });
+    </script>
+</body>
+</html>

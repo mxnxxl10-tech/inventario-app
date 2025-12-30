@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5. Captura de Datos</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <style>
+        /* Estilos específicos para esta pantalla */
+        .verification-row input:not([readonly]) { border: 2px solid #007bff; }
+        .verification-row button { width: 45px; }
+        .container { max-width: 800px; } 
+        /* Botón de verificación (✅) estilizado */
+        .verification-buttons .btn-verify{
+            width:40px;
+            height:40px;
+            border-radius:50%;
+            border:none;
+            background:var(--navy-700);
+            color:var(--white);
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            cursor:pointer;
+            box-shadow:0 6px 14px rgba(0,40,90,0.12);
+            transition:transform .08s ease, background .12s ease;
+        }
+        .verification-buttons .btn-verify:hover{ background:var(--navy-900); transform:translateY(-2px); }
+        .verification-buttons .btn-verify svg{ width:18px; height:18px; fill:currentColor; }
+    </style>
+</head>
+<body>
+    <div class="page-wrapper">
+        <main class="card">
+            <div class="brand">
+                <div class="logo" aria-hidden="true">
+                    <img src="assets/logo.png" alt="Logo" onerror="this.style.display='none'">
+                </div>
+                <div>
+                    <div class="company">Recsolog</div>
+                    <div class="subtitle">Captura de Datos</div>
+                </div>
+            </div>
+
+            <h1 id="main-title">Captura de Datos</h1>
+            <div id="context-info"></div>
+            
+            <div id="capture-fields" style="opacity: 1;">
+                <div class="title-display">SKU: <span id="sku-display"></span></div>
+
+                <!-- Contenedores de Indicadores (oculto por configuración) -->
+                
+                <form id="verification-form">
+                    <!-- Los campos se generan aquí por JavaScript -->
+                </form>
+
+                <div class="navigation-buttons">
+                    <button id="accept-conteo-btn" class="btn btn-success btn-centered" disabled style="width: 100%;">ACEPTAR (Guardar y Continuar)</button>
+                    <div>
+                        <button id="cerrar-btn" class="btn btn-danger" style="flex-grow: 1;">CERRAR</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="scripts/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // ---------------------------------------------------------------------
+            // INICIALIZACIÓN Y VARIABLES
+            // ---------------------------------------------------------------------
+            const context = JSON.parse(localStorage.getItem('conteo_context'));
+            const ubicacion_escaneada = localStorage.getItem('conteo_ubicacion');
+            const sku = localStorage.getItem('current_sku');
+            
+            const verificationForm = document.getElementById('verification-form');
+            const acceptBtn = document.getElementById('accept-conteo-btn');
+            const cerrarBtn = document.getElementById('cerrar-btn');
+            const skuDisplay = document.getElementById('sku-display');
+
+            let currentArticleData = null; 
+            let currentFieldIndex = 0;
+            let fieldOrder = [];            
+            let allFields = {};
+            let validatedFields = new Set(); 
+
+            // --- VALIDACIÓN DE CONTEXTO ---
+            if (!context || !ubicacion_escaneada || !sku) {
+                 alert('Error de contexto. Regresando a la validación de ubicación.');
+                 window.location.href = '3-validacion-ubicacion.html';
+                 return;
+            }
+
+            // --- OBTENER DATOS DESDE LA BASE DE DATOS ---
+            async function cargarDatosInventario() {
+                try {
+                    const response = await fetch('http://localhost:3000/api/consultar-inventario', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            ubicacion: ubicacion_escaneada,
+                            sku: sku
+                        })
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.success && result.data) {
+                        currentArticleData = {
+                            cantidad: result.data.cantidad || 0,
+                            descripcion: result.data.descripcion || 'Sin descripción',
+                            ubicacion: result.data.ubicacion || ubicacion_escaneada,
+                            pasillo: result.data.pasillo || '',
+                            lado: result.data.lado || '',
+                            pos_x: result.data.pos_x || '',
+                            pos_y: result.data.pos_y || ''
+                        };
+                    } else {
+                        // Si no hay datos, usar valores por defecto
+                        currentArticleData = {
+                            cantidad: 0,
+                            descripcion: 'Artículo no encontrado',
+                            ubicacion: ubicacion_escaneada,
+                            pasillo: '',
+                            lado: '',
+                            pos_x: '',
+                            pos_y: ''
+                        };
+                        console.warn('No se encontraron datos:', result.message);
+                    }
+
+                    skuDisplay.textContent = sku;
+                    document.getElementById('context-info').innerHTML = `Cuenta: ${context.cuenta} | Ubicación: ${ubicacion_escaneada}`;
+
+                    // Renderizar los campos con los datos obtenidos
+                    renderVerificationFields(currentArticleData);
+                    currentFieldIndex = 0;
+                    enableField(currentFieldIndex);
+
+                } catch (error) {
+                    console.error('Error al cargar datos del inventario:', error);
+                    alert('Error al conectar con el servidor. Verifique la conexión.');
+                }
+            }
+
+            // Iniciar la carga de datos
+            cargarDatosInventario();
+
+
+            // -----------------------------------------------------
+            // FUNCIONES DE RENDERIZADO Y SECUENCIA
+            // -----------------------------------------------------
+
+            function renderVerificationFields(data) {
+                verificationForm.innerHTML = '';
+                
+                // --- DEFINICIÓN DE LOS CAMPOS SOLICITADOS ---
+                allFields = {
+                    // SKU y Descripción (Informativos, readonly=true)
+                    'sku': { label: 'SKU', type: 'text', value: sku, readonly: true, showButtons: false },
+                    'descripcion': { label: 'Descripción', type: 'text', value: data.descripcion, readonly: true, showButtons: false },
+                    
+                    // Lote, Cantidad, Fecha (Editables con Confirmación - readonly=false)
+                    // Iniciar estos campos VACÍOS pero editables (el usuario los completará)
+                    'loteProveedor': { label: 'Lote Proveedor', type: 'text', value: '', readonly: false, isEditable: true, showButtons: true }, 
+                    'cantidadFisica': { label: 'Cantidad', type: 'number', value: '', min: 0, readonly: false, isEditable: true, showButtons: true }, 
+                    'fechaCaducidad': { label: 'Fecha Caducidad', type: 'date', value: '', readonly: false, isEditable: true, showButtons: true }, 
+                    
+                    // Ubicación (Informativos, readonly=true)
+                    'ubicacion': { label: 'Ubicación', type: 'text', value: ubicacion_escaneada || '', readonly: true, showButtons: false },
+                    'pasillo': { label: 'Pasillo', type: 'text', value: (data && data.pasillo) || '', readonly: true, showButtons: false },
+                    'lado': { label: 'Lado', type: 'text', value: (data && data.lado) || '', readonly: true, showButtons: false },
+                    'posicionX': { label: 'Posición X', type: 'text', value: (data && data.pos_x) || '', readonly: true, showButtons: false },
+                    'posicionY': { label: 'Posición Y', type: 'text', value: (data && data.pos_y) || '', readonly: true, showButtons: false },
+                };
+
+                // Orden de navegación secuencial
+                fieldOrder = Object.keys(allFields).filter(key => allFields[key].isEditable);
+
+                // Renderizado de todos los campos
+                Object.keys(allFields).forEach((key) => {
+                    const field = allFields[key];
+                    
+                    // Se usa readonly solo si NO es un campo editable (para los informativos)
+                    const isReadOnly = field.readonly && !field.isEditable ? 'readonly' : ''; 
+                    const placeholder = field.readonly && !field.isEditable ? 'Valor Teórico' : 'Ingrese/Corrija Dato';
+                    const showButtons = field.showButtons ? 'display: flex;' : 'display: none;';
+
+                    let buttonHtml = '';
+                    if (field.isEditable) {
+                        // botón con icono SVG (marca de verificación) en lugar de emoji
+                        buttonHtml = `<button type="button" class="btn-verify" data-action="confirm" data-key="${key}" aria-label="Confirmar campo">
+                                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9.00039 16.17L4.83039 12.0L3.41039 13.41L9.00039 19.0L21.0004 7.0L19.5904 5.59L9.00039 16.17Z" /></svg>
+                                      </button>`;
+                    }
+
+                    const html = `
+                        <div class="verification-row field-locked" id="row-field-${key}">
+                            <label for="field-${key}">${field.label}:</label>
+                            <input type="${field.type}" id="field-${key}" data-key="${key}" value="${field.value}" ${isReadOnly} placeholder="${placeholder}" ${field.min !== undefined ? 'min="' + field.min + '"' : ''}>
+                            
+                            <div class="verification-buttons" style="${showButtons}">
+                                ${buttonHtml}
+                            </div>
+                        </div>
+                    `;
+                    verificationForm.innerHTML += html;
+                });
+
+                verificationForm.querySelectorAll('.verification-buttons button').forEach(button => {
+                    button.addEventListener('click', handleVerification);
+                });
+            }
+
+            function enableField(index) {
+                const currentKey = fieldOrder[index];
+                if (!currentKey) {
+                    validateCompletion(); 
+                    return;
+                }
+                
+                const currentRow = document.getElementById(`row-field-${currentKey}`);
+                if (currentRow) {
+                    currentRow.classList.remove('field-locked');
+                    const buttons = currentRow.querySelector('.verification-buttons');
+                    
+                    if (buttons && buttons.style.display !== 'none') {
+                        const focusBtn = buttons.querySelector('.btn-verify') || buttons.querySelector('button');
+                        if (focusBtn) focusBtn.focus();
+                    } else {
+                        currentRow.querySelector('input').focus();
+                    }
+                }
+            }
+
+            function validateCompletion() {
+                if (validatedFields.size === fieldOrder.length) {
+                    acceptBtn.disabled = false;
+                }
+            }
+
+            function handleVerification(event) {
+                // event.currentTarget es el botón al que se agregó el listener
+                const button = event.currentTarget || event.target.closest('button');
+                if (!button) return;
+                const action = button.dataset.action;
+                const currentKey = button.dataset.key;
+                const currentRow = document.getElementById(`row-field-${currentKey}`);
+                const inputField = currentRow.querySelector('input');
+                
+                if (action === 'confirm') {
+                    if (!inputField.value) {
+                        alert(`El campo ${allFields[currentKey].label} no puede estar vacío.`);
+                        inputField.focus();
+                        return;
+                    }
+
+                    inputField.style.backgroundColor = '#d4edda'; 
+                    inputField.setAttribute('readonly', true); // Bloquea la edición después de confirmar
+                    
+                    currentRow.classList.add('field-locked');
+                    currentRow.querySelector('.verification-buttons').style.display = 'none';
+                    
+                    validatedFields.add(currentKey); 
+                    currentFieldIndex++;
+                    enableField(currentFieldIndex);
+                    validateCompletion();
+                }
+            }
+
+            // -----------------------------------------------------
+            // FASE 3: GUARDADO Y REDIRECCIONES
+            // -----------------------------------------------------
+
+            document.getElementById('accept-conteo-btn').addEventListener('click', async function() {
+                if (validatedFields.size !== fieldOrder.length) {
+                    alert('¡ERROR! Debe confirmar todos los campos (✅) antes de guardar.');
+                    return;
+                }
+                
+                const confirmacion = confirm("¡Confirmación de Conteo! Guardar datos y continuar.");
+                
+                if (confirmacion) {
+                    // Recolección de datos finales
+                    const conteoData = {
+                        cuenta: context.cuenta,
+                        ubicacion: ubicacion_escaneada,
+                        sku: document.getElementById('field-sku').value,
+                        loteProveedor: document.getElementById('field-loteProveedor').value,
+                        cantidadFisica: parseInt(document.getElementById('field-cantidadFisica').value),
+                        fechaCaducidad: document.getElementById('field-fechaCaducidad').value,
+                        usuario: context.usuario || 'Sistema'
+                    };
+                    
+                    try {
+                        // Guardar en la base de datos
+                        const response = await fetch('http://localhost:3000/api/guardar-conteo', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(conteoData)
+                        });
+
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            // También guardamos localmente para P6
+                            const dataParaP6 = {
+                                sku: conteoData.sku,
+                                descripcion: document.getElementById('field-descripcion').value,
+                                lote: conteoData.loteProveedor,
+                                cantidadFisica: conteoData.cantidadFisica,
+                                fechaCaducidad: conteoData.fechaCaducidad,
+                                ubicacion: document.getElementById('field-ubicacion').value,
+                                pasillo: document.getElementById('field-pasillo').value,
+                                lado: document.getElementById('field-lado').value,
+                                posicionX: document.getElementById('field-posicionX').value,
+                                posicionY: document.getElementById('field-posicionY').value,
+                                cantidadTeorica: currentArticleData.cantidad,
+                                ubicacion_escaneada: ubicacion_escaneada,
+                            };
+                            localStorage.setItem('last_conteo_data', JSON.stringify(dataParaP6));
+
+                            alert('✓ Datos guardados exitosamente en la base de datos. Escanee el siguiente artículo.');
+                            
+                            // Volver a la validación de SKU
+                            window.location.href = '4-validacion-sku.html';
+                        } else {
+                            alert('Error al guardar: ' + result.message);
+                        }
+                    } catch (error) {
+                        console.error('Error al guardar conteo:', error);
+                        alert('Error al conectar con el servidor. Verifique la conexión.');
+                    }
+                }
+            });
+
+            document.getElementById('cerrar-btn').addEventListener('click', function() {
+                alert('Cancelando captura. Volviendo a la Ubicación.');
+                // REDIRECCIÓN CLAVE: Vuelve a la Pantalla 3 (Validación de Ubicación)
+                window.location.href = '3-validacion-ubicacion.html';
+            });
+        });
+    </script>
+</body>
+</html>

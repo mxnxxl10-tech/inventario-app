@@ -1,0 +1,20 @@
+{
+  "name": "inventario-app",
+  "version": "1.0.0",
+  "description": "Aplicación de inventario con SQL Server",
+  "main": "server-wms-real.js",
+  "scripts": {
+    "start": "node server-wms-real.js",
+    "dev": "node server-wms-real.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^12.5.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "mssql": "^10.0.1"
+  }
+}

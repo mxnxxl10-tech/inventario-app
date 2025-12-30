@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4. Validación de Existencia de SKU</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <style>
+        /* Ajuste de estilos específicos para esta pantalla */
+        .container {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 6px 20px rgba(0, 44, 95, 0.1); /* Sombra corporativa */
+        }
+        #main-title {
+            color: #002c5f; /* Azul Marino Corporativo */
+            border-bottom: 2px solid #0056b3;
+            padding-bottom: 10px;
+        }
+        #context-info {
+            background-color: #f0f4f7; /* Gris muy claro */
+            padding: 10px;
+            border-radius: 6px;
+            color: #333;
+            font-size: 1em;
+            border: 1px solid #ddd;
+        }
+        #sku-input {
+            border: 2px solid #0056b3; /* Borde azul para el input de acción */
+            font-size: 1.2em;
+            height: 50px;
+            text-align: center;
+        }
+        #buscar-btn {
+            background-color: #0056b3; /* Azul primario */
+            font-weight: bold;
+            margin-top: 15px;
+        }
+        /* Estilos del Área de Pregunta */
+        #question-area {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #ffffff;
+            margin-top: 30px;
+        }
+        #question-area p {
+            color: #002c5f; /* Azul marino para el texto principal */
+            font-size: 1.3em;
+            margin-bottom: 20px;
+        }
+        #question-area strong {
+            color: #dc3545; /* Rojo para destacar el SKU si es un riesgo */
+            font-weight: 700;
+        }
+        /* Botones SÍ/NO */
+        #btn-si {
+            background-color: #28a745; /* Verde para Aceptar (SÍ) */
+            padding: 10px 0;
+            font-size: 1.1em;
+            font-weight: bold;
+            flex-grow: 1;
+        }
+        #btn-no {
+            background-color: #6c757d; /* Gris oscuro para Negar (NO/Falta) */
+            padding: 10px 0;
+            font-size: 1.1em;
+            font-weight: bold;
+            flex-grow: 1;
+        }
+        /* Botón de Cierre de Inventario */
+        #btn-cierre-inventario {
+            background-color: #343a40; /* Gris muy oscuro/negro para acción final */
+            margin-top: 30px;
+            font-size: 1em;
+            padding: 10px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-wrapper">
+        <main class="card" style="max-width:700px;">
+            <div class="brand">
+                <div class="logo" aria-hidden="true">
+                    <img src="assets/logo.png" alt="Logo" onerror="this.style.display='none'">
+                </div>
+                <div>
+                    <div class="company">Recsolog</div>
+                    <div class="subtitle">Validación de Producto (SKU)</div>
+                </div>
+            </div>
+
+            <h1 id="main-title">Validación de Producto</h1>
+            <div id="context-info" style="margin-bottom: 20px; font-weight: bold;"></div>
+            
+            <div id="sku-search-area">
+                <p style="text-align: center;">Escanee el Código del Artículo (SKU):</p>
+                <input type="text" id="sku-input" placeholder="SKU / ID Buscador" autofocus required>
+                <button id="buscar-btn" class="btn btn-primary btn-centered" style="background-color: #007bff;">BUSCAR</button>
+            </div>
+
+            <!-- Área de Pregunta -->
+            <div id="question-area" style="display: none; text-align: center; margin-top: 30px;">
+                <p style="font-size: 1.2em; color: #002c5f;">
+                    ¿Existe el SKU: <strong id="sku-display"></strong> en la ubicación?
+                </p>
+                
+                <div class="navigation-buttons" style="display: flex; gap: 10px; justify-content: center;">
+                    <button id="btn-si" class="btn btn-success">SÍ</button>
+                    <button id="btn-no" class="btn btn-secondary">NO</button>
+                </div>
+            </div>
+
+            <!-- NUEVO BOTÓN DE CIERRE DE INVENTARIO -->
+            <div style="text-align: center; margin-top: 25px;">
+                <button id="btn-cierre-inventario" class="btn btn-danger btn-centered" style="background-color: #343a40;">
+                    CERRAR INVENTARIO DE UBICACIÓN
+                </button>
+            </div>
+
+        </main>
+    </div>
+
+    <script src="scripts/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const context = JSON.parse(localStorage.getItem('conteo_context'));
+            const ubicacion = localStorage.getItem('conteo_ubicacion');
+            const skuInput = document.getElementById('sku-input');
+            const buscarBtn = document.getElementById('buscar-btn');
+            const questionArea = document.getElementById('question-area');
+            const skuDisplay = document.getElementById('sku-display');
+            const cierreInventarioBtn = document.getElementById('btn-cierre-inventario');
+            
+            // Verifica si la sesión y ubicación existen
+            if (!context || !ubicacion) {
+                alert('Falta Ubicación o Sesión. Regresando a validar Ubicación.');
+                window.location.href = '3-validacion-ubicacion.html';
+                return;
+            }
+            document.getElementById('context-info').innerHTML = `Cuenta: ${context.cuenta} | Ubicación: ${ubicacion}`;
+
+            function disableSearch() {
+                buscarBtn.disabled = true;
+                skuInput.setAttribute('readonly', true);
+            }
+
+            function handleSearch() {
+                const sku = skuInput.value.trim().toUpperCase();
+                if (sku) {
+                    skuDisplay.textContent = sku;
+                    questionArea.style.display = 'block';
+                    disableSearch(); 
+                } else {
+                    alert('Escaneo inválido. Intente de nuevo.');
+                }
+            }
+
+            function handleAnswer(existe) {
+                const sku = skuDisplay.textContent;
+                
+                if (existe) { 
+                    localStorage.setItem('current_sku', sku);
+                    window.location.href = '5-captura-detallada.html'; 
+                } else { 
+                    alert('Producto no existente. Registrando SKU: ' + sku + ' con IRA/ILA = 0% y volviendo a escanear.');
+                    
+                    // 💡 FUTURO: Lógica para enviar el registro de no-existencia (IRA/ILA=0) a SQL.
+                    
+                    window.location.href = '4-validacion-sku.html'; 
+                }
+            }
+            
+            // --- LÓGICA DE CIERRE DE INVENTARIO: pedir confirmación antes de redirigir a P3 ---
+            cierreInventarioBtn.addEventListener('click', function() {
+                const confirmacion = confirm('¿Está seguro que desea cerrar el inventario de esta ubicación y regresar a Validar Ubicación?');
+                if (confirmacion) {
+                    // Redirige a la pantalla de validación de ubicación (P3)
+                    window.location.href = '3-validacion-ubicacion.html';
+                }
+            });
+
+            // --- ASIGNACIÓN DE EVENTOS ---
+            skuInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault(); 
+                    handleSearch();
+                }
+            });
+
+            buscarBtn.addEventListener('click', handleSearch);
+            
+            document.getElementById('btn-si').addEventListener('click', () => handleAnswer(true));
+            document.getElementById('btn-no').addEventListener('click', () => handleAnswer(false));
+        });
+    </script>
+</body>
+</html>
