@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2. Selección de Cuenta</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <style>
+        /* Estilos específicos para la lista de cuentas */
+        #cuenta-list {
+            border: 2px solid #002D62; /* azul marino */
+            border-radius: 6px;
+            padding: 6px;
+            max-height: 220px;
+            overflow: auto;
+            background: #fff;
+        }
+        .cuenta-parent { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; position: relative; }
+        .parent-row { display:flex; justify-content:space-between; align-items:center; }
+        .cuenta-label { cursor: pointer; font-weight: 600; padding:4px 6px; border-radius:4px; }
+        .toggle-btn { color: #002D62; font-size: 14px; margin-left: 8px; cursor: pointer; background:transparent; border:none; }
+        .cuenta-child { padding: 6px 8px; cursor: pointer; border-radius:4px; margin:2px 0; }
+        .cuenta-child:hover, .cuenta-label:hover { background: #f4f8ff; }
+        .cuenta-child.selected, .cuenta-label.selected { border: 1px solid #002D62; background: #eaf3ff; position: relative; padding-right: 28px; }
+        .cuenta-child.selected::after, .cuenta-label.selected::after {
+            content: '✓'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #002D62; font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-wrapper">
+        <main class="card card--small">
+            <div class="brand">
+                <div class="logo" aria-hidden="true">
+                    <img src="assets/logo.png" alt="Logo" onerror="this.style.display='none'">
+                </div>
+                <div>
+                    <div class="company">Recsolog</div>
+                    <div class="subtitle">Seleccionar Cuenta de Conteo</div>
+                </div>
+            </div>
+
+            <h1 id="main-title">Seleccionar Cuenta de Conteo</h1>
+            
+
+            <select id="bodega-select" style="width: 100%; padding: 10px; margin-bottom: 10px;">
+                <option value="">Seleccionar Bodega</option>
+                <option value="BOD1">Bodega 1</option>
+                <option value="BOD2">Bodega 2</option>
+                <option value="BOD3">Bodega 3</option>
+            </select>
+            
+            <div id="cuenta-container" style="width:100%; margin-bottom:15px;">
+                <!-- Lista dinámica de cuentas y subcuentas. Se genera por JS -->
+                <div id="cuenta-list"></div>
+            </div>
+
+            <button id="iniciar-conteo-btn" class="btn btn-primary btn-centered" disabled>Iniciar Conteo</button>
+            
+            <div class="navigation-buttons">
+                <button id="btn-reportes" onclick="window.location.href='6-reportes.html'" class="btn btn-secondary" style="display: none;"> Ver Reportes</button>
+                <button onclick="sessionStorage.clear(); window.location.href='1-login.html'" class="btn btn-secondary">Cerrar Sesión</button>
+            </div>
+        </main>
+    </div>
+
+    <script src="scripts/app.js"></script>
+    <script>
+        // Verificar autenticación
+        const usuarioData = sessionStorage.getItem('usuario');
+        if (!usuarioData) {
+            alert('Debe iniciar sesión primero');
+            window.location.href = '1-login.html';
+        }
+        
+        // Mostrar bienvenida
+        const usuario = JSON.parse(usuarioData);
+        const bienvenidaElement = document.getElementById('bienvenida-usuario');
+        if (bienvenidaElement) {
+            bienvenidaElement.textContent = 
+                `Bienvenido ${usuario.nombreCompleto} (${usuario.rol}) - Elige la Bodega y la Cuenta a inventariar:`;
+        }
+        
+        // Mostrar botón de reportes solo para administradores
+        if (usuario.rol === 'Administrador') {
+            document.getElementById('btn-reportes').style.display = 'inline-block';
+        }
+        
+        // ----------------------------------------------------------------------
+        // DEFINICIÓN DE LA JERARQUÍA DE CUENTAS (PADRES Y SUBCUENTAS)
+        // ----------------------------------------------------------------------
+        // Cada bodega contiene grupos: un padre (opcional) con subcuentas.
+        const cuentas_por_bodega = {
+            'BOD1': {
+                groups: [
+                    { parent: 'ODELLA', children: ['Odella', 'Filorga', 'SVR'] },
+                    { parent: 'MULTICUENTAS', children: ['Montana', 'Fiserv', 'Glexico', 'Edifier'] },
+                    { parent: 'Zaneo', children: [] },
+                    { parent: 'Liverpool', children: [] }
+                ]
+            },
+            'BOD2': {
+                groups: [ { parent: 'Shacman', children: [] } ]
+            },
+            'BOD3': {
+                groups: [
+                    { parent: 'Melonn', children: [] },
+                    { parent: 'Latin Food', children: [] },
+                    { parent: 'Food Protein', children: [] },
+                    { parent: 'Lexmark', children: [] },
+                    { parent: 'Gama y Empaque', children: [] }
+                ]
+            }
+        };
+
+        const bodegaSelect = document.getElementById('bodega-select');
+        const cuentaList = document.getElementById('cuenta-list');
+        const iniciarBtn = document.getElementById('iniciar-conteo-btn');
+
+        // Estado de la selección
+        let selectedCuenta = null;
+        iniciarBtn.disabled = true;
+
+        bodegaSelect.addEventListener('change', function() {
+            const bodegaId = this.value;
+
+            // Limpiar lista y estado
+            cuentaList.innerHTML = '';
+            selectedCuenta = null;
+            iniciarBtn.disabled = true;
+
+            if (bodegaId && cuentas_por_bodega[bodegaId]) {
+                const groups = cuentas_por_bodega[bodegaId].groups;
+
+                groups.forEach((g, gi) => {
+                    const parentId = `${bodegaId}::parent::${gi}`;
+                    // Crear bloque para la cuenta padre
+                    const parentDiv = document.createElement('div');
+                    parentDiv.className = 'cuenta-parent';
+                    parentDiv.style.padding = '6px 8px';
+                    parentDiv.style.borderBottom = '1px solid #f0f0f0';
+
+                    const parentRow = document.createElement('div');
+                    parentRow.className = 'parent-row';
+
+                    const label = document.createElement('div');
+                    label.className = 'cuenta-label';
+                    label.textContent = g.parent;
+
+                    const toggleBtn = document.createElement('button');
+                    toggleBtn.type = 'button';
+                    toggleBtn.className = 'toggle-btn';
+                    toggleBtn.textContent = g.children && g.children.length > 0 ? '▸' : '';
+                    toggleBtn.title = g.children && g.children.length > 0 ? 'Desplegar subcuentas' : '';
+
+                    parentRow.appendChild(label);
+                    parentRow.appendChild(toggleBtn);
+                    parentDiv.appendChild(parentRow);
+
+                    // Subcuentas (inicialmente ocultas)
+                    const childList = document.createElement('div');
+                    childList.style.marginTop = '6px';
+                    childList.style.display = 'none';
+                    childList.style.paddingLeft = '12px';
+
+                    if (g.children && g.children.length > 0) {
+                        g.children.forEach((child, ci) => {
+                            const childDiv = document.createElement('div');
+                            childDiv.className = 'cuenta-child';
+                            childDiv.textContent = child;
+                            childDiv.addEventListener('click', function(e) {
+                                e.stopPropagation();
+                                // seleccionar esta subcuenta
+                                selectedCuenta = `${bodegaId}_${child}`;
+                                // resaltar selección
+                                cuentaList.querySelectorAll('.selected').forEach(n => n.classList.remove('selected'));
+                                childDiv.classList.add('selected');
+                                iniciarBtn.disabled = false;
+                            });
+                            childList.appendChild(childDiv);
+                        });
+                    }
+
+                    // Toggle button: solo despliega/contrae las subcuentas
+                    toggleBtn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        if (g.children && g.children.length > 0) {
+                            const isOpen = childList.style.display === 'block';
+                            childList.style.display = isOpen ? 'none' : 'block';
+                            toggleBtn.textContent = isOpen ? '▸' : '▾';
+                        }
+                    });
+
+                    // Click en la etiqueta: selecciona la cuenta padre (sin alternar)
+                    label.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        selectedCuenta = `${bodegaId}_${g.parent}`;
+                        cuentaList.querySelectorAll('.selected').forEach(n => n.classList.remove('selected'));
+                        label.classList.add('selected');
+                        iniciarBtn.disabled = false;
+                    });
+
+                    parentDiv.appendChild(childList);
+                    cuentaList.appendChild(parentDiv);
+                });
+            }
+        });
+        
+        iniciarBtn.addEventListener('click', function() {
+            const seleccion = selectedCuenta;
+            const bodegaNombre = bodegaSelect.options[bodegaSelect.selectedIndex].text;
+            
+            if (seleccion) {
+                const cuentaFinal = seleccion.split('_')[1];
+                // Determinar qué campos son editables según bodega y cuenta
+                // Regla: Si es BOD1 y pertenece al grupo ODELLA (parent 'ODELLA' o sus hijos 'Odella','Filorga','SVR')
+                // entonces permitir loteProveedor, cantidad y fechaCaducidad.
+                // Si es MULTICUENTAS (grupo parent 'MULTICUENTAS' y sus hijos) o cualquier cuenta en BOD2/BOD3,
+                // sólo permitir editar la cantidad.
+                const bodegaId = seleccion.split('_')[0];
+
+                // Buscar el grupo al que pertenece la cuenta seleccionada
+                let grupoEncontrado = null;
+                if (cuentas_por_bodega[bodegaId] && cuentas_por_bodega[bodegaId].groups) {
+                    for (const g of cuentas_por_bodega[bodegaId].groups) {
+                        if ((g.parent && g.parent.toString().toLowerCase() === cuentaFinal.toString().toLowerCase()) ||
+                            (g.children && g.children.map(c => c.toString().toLowerCase()).includes(cuentaFinal.toString().toLowerCase()))) {
+                            grupoEncontrado = g;
+                            break;
+                        }
+                    }
+                }
+
+                let editable_lote = false;
+                let editable_fecha = false;
+                let editable_cantidad = true; // siempre editable
+
+                if (bodegaId === 'BOD1' && grupoEncontrado) {
+                    const parentName = (grupoEncontrado.parent || '').toString().toLowerCase();
+                    if (parentName === 'odella') {
+                        // Grupo ODELLA permite lote y fecha
+                        editable_lote = true;
+                        editable_fecha = true;
+                    } else {
+                        // Otros grupos en BOD1 (p.ej. MULTICUENTAS) sólo cantidad
+                        editable_lote = false;
+                        editable_fecha = false;
+                    }
+                } else {
+                    // BOD2/BOD3 u otros: sólo cantidad
+                    editable_lote = false;
+                    editable_fecha = false;
+                }
+
+                // Guardar la selección y permisos en localStorage para que la pantalla de captura los use
+                localStorage.setItem('conteo_context', JSON.stringify({
+                    bodega: bodegaNombre,
+                    cuenta: cuentaFinal,
+                    formato: 'DETALLE',
+                    editable_lote: editable_lote,
+                    editable_fecha: editable_fecha,
+                    editable_cantidad: editable_cantidad
+                }));
+                
+                // REDIRECCIÓN CLAVE: Va a la PANTALLA 3: Validación de Ubicación
+                window.location.href = '3-validacion-ubicacion.html';
+            }
+        });
+    </script>
+</body>
+</html>

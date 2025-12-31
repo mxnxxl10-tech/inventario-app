@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes de Inventario</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        select, input[type="date"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, input[type="date"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #09e726 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+
+        .info-box p {
+            margin: 0;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+            color: #c62828;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1> Reportes de Inventario</h1>
+
+        <div class="info-box">
+            <p>Descarga reportes de conteos físicos filtrando por cuenta y rango de fechas.</p>
+        </div>
+
+        <form id="reporteForm">
+            <div class="form-group">
+                <label for="cuenta">Cuenta:</label>
+                <select id="cuenta" required>
+                    <option value="">Seleccione una cuenta...</option>
+                    <option value="Montana">Montana</option>
+                    <option value="Fiserv">Fiserv</option>
+                    <option value="Liverpool">Liverpool</option>
+                    <option value="Glexico">Glexico</option>
+                    <option value="Edifier">Edifier</option>
+                    <option value="Odella">Odella</option>
+                    <option value="Filorga">Filorga</option>
+                    <option value="SVR">SVR</option>
+                    <option value="Zaneo">Zaneo</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="fechaInicio">Fecha Inicio:</label>
+                <input type="date" id="fechaInicio" required>
+            </div>
+
+            <div class="form-group">
+                <label for="fechaFin">Fecha Fin:</label>
+                <input type="date" id="fechaFin" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="btnDescargar">
+                 Descargar Reporte Excel
+            </button>
+
+            <button type="button" class="btn btn-secondary" onclick="window.location.href='2-seleccion-cuenta.html'">
+                 Volver 
+            </button>
+        </form>
+
+        <div class="loading" id="loading">
+            Generando reporte, por favor espere...
+        </div>
+
+        <div class="error" id="error"></div>
+    </div>
+
+    <script>
+        // Verificar autenticación y rol de administrador
+        const usuarioData = sessionStorage.getItem('usuario');
+        if (!usuarioData) {
+            alert('Debe iniciar sesión primero');
+            window.location.href = '1-login.html';
+        } else {
+            const usuario = JSON.parse(usuarioData);
+            if (usuario.rol !== 'Administrador') {
+                alert('Acceso denegado. Solo los administradores pueden ver reportes.');
+                window.location.href = '2-seleccion-cuenta.html';
+            }
+        }
+        
+        // Establecer fecha de hoy por defecto
+        const hoy = new Date().toISOString().split('T')[0];
+        document.getElementById('fechaInicio').value = hoy;
+        document.getElementById('fechaFin').value = hoy;
+
+        document.getElementById('reporteForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const cuenta = document.getElementById('cuenta').value;
+            const fechaInicio = document.getElementById('fechaInicio').value;
+            const fechaFin = document.getElementById('fechaFin').value;
+            const btnDescargar = document.getElementById('btnDescargar');
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+
+            // Validar que fecha inicio no sea mayor que fecha fin
+            if (fechaInicio > fechaFin) {
+                errorDiv.textContent = 'La fecha de inicio no puede ser mayor que la fecha fin';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            errorDiv.style.display = 'none';
+            btnDescargar.disabled = true;
+            loading.style.display = 'block';
+
+            try {
+                const response = await fetch(`/api/exportar-conteos-periodo?cuenta=${encodeURIComponent(cuenta)}&fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Error al generar el reporte');
+                }
+
+                const data = await response.json();
+                
+                if (!data.registros || data.registros.length === 0) {
+                    errorDiv.textContent = 'No se encontraron registros para el periodo y cuenta seleccionados';
+                    errorDiv.style.display = 'block';
+                    loading.style.display = 'none';
+                    btnDescargar.disabled = false;
+                    return;
+                }
+
+                // Generar CSV
+                generarCSV(data.registros, cuenta, fechaInicio, fechaFin);
+
+                loading.style.display = 'none';
+                btnDescargar.disabled = false;
+                
+                // Mensaje de éxito
+                alert(`✓ Reporte descargado exitosamente\n\nTotal de registros: ${data.registros.length}`);
+
+            } catch (error) {
+                console.error('Error:', error);
+                errorDiv.textContent = error.message || 'Error al generar el reporte';
+                errorDiv.style.display = 'block';
+                loading.style.display = 'none';
+                btnDescargar.disabled = false;
+            }
+        });
+
+        function generarCSV(registros, cuenta, fechaInicio, fechaFin) {
+            console.log('Registros recibidos en generarCSV (primeros 2):', registros.slice(0, 2));
+            
+            // Crear encabezados con información de cuenta y período
+            let csv = '\uFEFF'; // BOM para UTF-8
+            
+            // Agregar información de la cuenta y período
+            csv += `CUENTA:,${cuenta}\n`;
+            csv += `PERIODO:,${fechaInicio === fechaFin ? fechaInicio : `${fechaInicio} a ${fechaFin}`}\n`;
+            csv += `FECHA DE EXPORTE:,${new Date().toLocaleDateString('es-MX')}\n`;
+            csv += '\n';
+            
+            // Encabezados de columnas
+            csv += 'Compañía,SKU,Descripción,Segmento,Cantidad WMS,Lote WMS,Fecha Caducidad WMS,Cantidad Física,Lote Físico,Fecha Caducidad,Fecha Conteo,Diferencia,Ubicación,Pasillo,Lado,Pos X,Pos Y\n';
+
+            let totalILA = 0;
+            let totalIRA = 0;
+            let registrosConWMS = 0;
+
+            // Agregar filas
+            registros.forEach(reg => {
+                console.log(`SKU: ${reg.sku}, cantidad: ${reg.cantidad}, cantidad_fisica: ${reg.cantidad_fisica}`);
+                const ila = reg.cantidad || 0;
+                const ira = reg.cantidad_fisica || 0;
+                const diferencia = ira - ila;
+                const porcentajeILA = ila > 0 ? '100%' : '0%';
+                const porcentajeIRA = ila > 0 ? ((ira / ila) * 100).toFixed(2) + '%' : (ira > 0 ? '100%' : '0%');
+
+                totalILA += ila;
+                totalIRA += ira;
+                if (ila > 0) registrosConWMS++;
+
+                // Formatear fecha de caducidad sin hora
+                let fechaCaducidadFormateada = 'N/A';
+                if (reg.fecha_caducidad) {
+                    // Parsear fecha como local para evitar cambio de zona horaria
+                    const fechaStr = reg.fecha_caducidad.split('T')[0]; // Obtener solo YYYY-MM-DD
+                    const [anio, mes, dia] = fechaStr.split('-');
+                    const fecha = new Date(anio, mes - 1, dia); // Crear fecha local
+                    if (!isNaN(fecha.getTime())) {
+                        fechaCaducidadFormateada = fecha.toLocaleDateString('es-MX');
+                    }
+                }
+              
+                csv += `"${reg.compania || 'N/A'}",`;
+                csv += `"${reg.sku}",`;
+                csv += `"${(reg.descripcion || 'N/A').replace(/"/g, '""')}",`;
+                csv += `"${reg.segmento || 'N/A'}",`;
+                csv += `${ila},`;
+                csv += `"${reg.lote_wms || 'N/A'}",`;
+                csv += `"${reg.fechaCaducidadWMS || 'N/A'}",`;
+                csv += `${ira},`;
+                csv += `"${reg.lote || 'N/A'}",`;
+                csv += `"${fechaCaducidadFormateada}",`;
+                csv += `"${reg.fecha_conteo || 'N/A'}",`;
+                csv += `${diferencia},`;
+             //   csv += `${porcentajeILA},`;
+             //   csv += `${porcentajeIRA},`;
+                csv += `"${reg.ubicacion || 'N/A'}",`;
+                csv += `"${reg.pasillo || 'N/A'}",`;
+                csv += `"${reg.lado || 'N/A'}",`;
+                csv += `"${reg.pos_x || 'N/A'}",`;
+                csv += `"${reg.pos_y || 'N/A'}"\n`;
+            });
+
+            // Agregar fila de totales
+            const totalDiferencia = totalIRA - totalILA;
+            const porcentajeTotalILA = registros.length > 0 ? ((registrosConWMS / registros.length) * 100).toFixed(2) + '%' : '0%';
+            const porcentajeTotalIRA = totalILA > 0 ? ((totalIRA / totalILA) * 100).toFixed(2) + '%' : '0%';
+            
+            csv += '\n'; // Línea en blanco
+            // TOTAL: Compañía,SKU,Descripción,Segmento,Cantidad WMS,Lote WMS,Fecha Caducidad WMS,Cantidad Física,Lote Físico,Fecha Caducidad,Fecha Conteo,Diferencia,% ILA,% IRA,Ubicación,Pasillo,Lado,Pos X,Pos Y
+            csv += `"","TOTAL","","",${totalILA},"","",${totalIRA},"","","",${totalDiferencia},"","","","","","",""\n`;
+
+            // Crear archivo y descargar
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            const nombreArchivo = fechaInicio === fechaFin 
+                ? `Inventario_${cuenta}_${fechaInicio}.csv`
+                : `Inventario_${cuenta}_${fechaInicio}_a_${fechaFin}.csv`;
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', nombreArchivo);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

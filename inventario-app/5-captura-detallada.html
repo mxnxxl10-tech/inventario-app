@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5. Captura de Datos</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <style>
+        /* Estilos específicos para esta pantalla */
+        .verification-row input:not([readonly]) { border: 2px solid #007bff; }
+        .verification-row button { width: 45px; }
+        .container { max-width: 800px; } 
+        /* Botón de verificación (✅) estilizado */
+        .verification-buttons .btn-verify{
+            width:40px;
+            height:40px;
+            border-radius:50%;
+            border:none;
+            background:var(--navy-700);
+            color:var(--white);
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            cursor:pointer;
+            box-shadow:0 6px 14px rgba(0,40,90,0.12);
+            transition:transform .08s ease, background .12s ease;
+        }
+        .verification-buttons .btn-verify:hover{ background:var(--navy-900); transform:translateY(-2px); }
+        .verification-buttons .btn-verify svg{ width:18px; height:18px; fill:currentColor; }
+        /* Fecha: permitimos escribir o usar calendario (input date permite ambos en muchos navegadores) */
+    </style>
+</head>
+<body>
+    <div class="page-wrapper">
+        <main class="card">
+            <div class="brand">
+                <div class="logo" aria-hidden="true">
+                    <img src="assets/logo.png" alt="Logo" onerror="this.style.display='none'">
+                </div>
+                <div>
+                    <div class="company">Recsolog</div>
+                    <div class="subtitle">Captura de Datos</div>
+                </div>
+            </div>
+
+            <h1 id="main-title">Captura de Datos</h1>
+            <div id="context-info"></div>
+            
+            <div id="capture-fields" style="opacity: 1;">
+                <div class="title-display">SKU: <span id="sku-display"></span></div>
+
+                <!-- Contenedores de Indicadores (oculto por configuración) -->
+                
+                <form id="verification-form">
+                    <!-- Los campos se generan aquí por JavaScript -->
+                </form>
+
+                <div class="navigation-buttons">
+                    <button id="accept-conteo-btn" class="btn btn-success btn-centered" disabled style="width: 100%;">ACEPTAR (Guardar y Continuar)</button>
+                    <button id="cerrar-btn" class="btn btn-danger" style="width: 100%;">CERRAR</button>
+                    <!-- Botón invisible usado internamente para exportar -->
+                    <button id="exportar-excel-btn" style="display: none;"></button>
+                     
+                </div>
+            </div>
+        </main>
+        
+    </div>
+    <script src="scripts/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // ---------------------------------------------------------------------
+            // INICIALIZACIÓN Y VARIABLES
+            // ---------------------------------------------------------------------
+            const context = JSON.parse(localStorage.getItem('conteo_context'));
+            const ubicacion_escaneada = localStorage.getItem('conteo_ubicacion');
+            const sku = localStorage.getItem('current_sku');
+            
+            const verificationForm = document.getElementById('verification-form');
+            const acceptBtn = document.getElementById('accept-conteo-btn');
+            const cerrarBtn = document.getElementById('cerrar-btn');
+            const skuDisplay = document.getElementById('sku-display');
+
+            let currentArticleData = null; 
+            let currentFieldIndex = 0;
+            let fieldOrder = [];            
+            let allFields = {};
+            let validatedFields = new Set();
+            let lotesDisponiblesWMS = []; // Guardar los lotes del WMS para comparar al exportar
+
+            // Función para buscar lote en WMS
+            function buscarLoteEnWMS(loteIngresado) {
+                if (!lotesDisponiblesWMS || lotesDisponiblesWMS.length === 0) {
+                    return { encontrado: false, cantidad: 0, fecha: '' };
+                }
+                
+                const loteEncontrado = lotesDisponiblesWMS.find(l => 
+                    (l.lote || '').toString().toUpperCase() === loteIngresado.toString().toUpperCase()
+                );
+                
+                return {
+                    encontrado: !!loteEncontrado,
+                    cantidad: loteEncontrado ? (loteEncontrado.cantidad || 0) : 0,
+                    fecha: loteEncontrado ? (loteEncontrado.fecha || '') : '',
+                    lote: loteEncontrado ? loteEncontrado.lote : ''
+                };
+            } 
+            
+              
+
+            // Función para cargar datos del inventario (desde backend o fallback local)
+            async function cargarDatosInventario() {
+                try {
+                    const result = await window.appApi.consultarInventario(ubicacion_escaneada, sku, context?.nombre_cuenta);
+
+                    if (result && result.success && result.data) {
+                        currentArticleData = {
+                            cantidad: result.data.cantidad || 0,
+                            descripcion: result.data.descripcion || 'Sin descripción',
+                            ubicacion_teorica: result.data.ubicacion || ubicacion_escaneada,
+                            pasillo: result.data.pasillo || '',
+                            lado: result.data.lado || '',
+                            posx: result.data.pos_x || '',
+                            posy: result.data.pos_y || ''
+                        };
+                        
+                        // Guardar los lotes del WMS para comparar después
+                        if (result.data.lotes && result.data.lotes.length > 0) {
+                            lotesDisponiblesWMS = result.data.lotes;
+                        }
+                        
+                    } else {
+                        // Si no hay datos, intentar cargar desde current_product local
+                        const prod = JSON.parse(localStorage.getItem('current_product') || 'null');
+                        currentArticleData = {
+                            cantidad: 0,
+                            descripcion: (prod && (prod.Nombre || prod.Descripcion)) || 'Artículo no encontrado',
+                            ubicacion_teorica: ubicacion_escaneada,
+                            pasillo: '',
+                            lado: '',
+                            posx: '',
+                            posy: ''
+                        };
+                        console.warn('No se encontraron datos remotos:', result && result.message);
+                    }
+
+                    skuDisplay.textContent = sku;
+                    document.getElementById('context-info').innerHTML = `Cuenta: ${context.cuenta} | Ubicación: ${ubicacion_escaneada}`;
+
+                    // Renderizar siempre los campos (modal desactivado)
+                    renderVerificationFields(currentArticleData);
+                    currentFieldIndex = 0;
+                    enableField(currentFieldIndex);
+
+                } catch (error) {
+                    console.error('Error al cargar datos del inventario:', error);
+                    alert('Error al conectar con el servidor. Verifique la conexión.');
+                }
+            }
+
+            // Iniciar la carga de datos
+            cargarDatosInventario();
+
+
+            // -----------------------------------------------------
+            // FUNCIONES DE RENDERIZADO Y SECUENCIA
+            // -----------------------------------------------------
+
+            function renderVerificationFields(data) {
+                verificationForm.innerHTML = '';
+                
+                // --- DEFINICIÓN DE LOS CAMPOS SOLICITADOS ---
+                // Respetar permisos desde `context` (editable_lote, editable_fecha, editable_cantidad)
+                const allowLote = context && context.editable_lote ? true : false;
+                const allowFecha = context && context.editable_fecha ? true : false;
+                const allowCantidad = context && (typeof context.editable_cantidad === 'boolean' ? context.editable_cantidad : true);
+
+                allFields = {
+                    // Informativos (siempre visibles)
+                    'sku': { label: 'SKU', type: 'text', value: sku, readonly: true, showButtons: false, alwaysShow: true, isEditable: false },
+                    'descripcion': { label: 'Descripción', type: 'text', value: data.descripcion, readonly: true, showButtons: false, alwaysShow: true, isEditable: false },
+
+                    // Lote, Cantidad, Fecha (visibles/editarables según permisos)
+                    'loteProveedor': { label: 'Lote Proveedor', type: 'text', value: '', readonly: false, isEditable: allowLote, showButtons: allowLote, alwaysShow: allowLote },
+                    'cantidadFisica': { label: 'Cantidad', type: 'number', value: '', min: 0, readonly: false, isEditable: allowCantidad, showButtons: allowCantidad, alwaysShow: true },
+                    // Fecha acepta escáner (DD/MM/YYYY) o entrada manual con calendario
+                    'fechaCaducidad': { label: 'Fecha Caducidad', type: 'text', value: '', readonly: false, isEditable: allowFecha, showButtons: allowFecha, alwaysShow: allowFecha, isFechaField: true },
+
+                    // Ubicación y metadatos (siempre visibles)
+                    'ubicacion': { label: 'Ubicación', type: 'text', value: ubicacion_escaneada, readonly: true, showButtons: false, alwaysShow: true, isEditable: false },
+                    'pasillo': { label: 'Pasillo', type: 'text', value: data.pasillo, readonly: true, showButtons: false, alwaysShow: true, isEditable: false },
+                    'lado': { label: 'Lado', type: 'text', value: data.lado, readonly: true, showButtons: false, alwaysShow: true, isEditable: false },
+                    'posicionX': { label: 'Posición X', type: 'text', value: data.posx, readonly: true, showButtons: false, alwaysShow: true, isEditable: false },
+                    'posicionY': { label: 'Posición Y', type: 'text', value: data.posy, readonly: true, showButtons: false, alwaysShow: true, isEditable: false },
+                };
+
+                // Orden de navegación secuencial (solo incluir campos editables)
+                fieldOrder = Object.keys(allFields).filter(key => allFields[key].isEditable);
+
+                // Renderizado de todos los campos
+                Object.keys(allFields).forEach((key) => {
+                    const field = allFields[key];
+                    
+                    // Se usa readonly solo si NO es un campo editable (para los informativos)
+                    const isReadOnly = field.readonly && !field.isEditable ? 'readonly' : ''; 
+                    const placeholder = field.readonly && !field.isEditable ? 'Valor Teórico' : 'Ingrese/Corrija Dato';
+                    const showButtons = field.showButtons ? 'display: flex;' : 'display: none;';
+
+                    let buttonHtml = '';
+                    if (field.isEditable) {
+                        // botón con icono SVG (marca de verificación) en lugar de emoji
+                        buttonHtml = `<button type="button" class="btn-verify" data-action="confirm" data-key="${key}" aria-label="Confirmar campo">
+                                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9.00039 16.17L4.83039 12.0L3.41039 13.41L9.00039 19.0L21.0004 7.0L19.5904 5.59L9.00039 16.17Z" /></svg>
+                                      </button>`;
+                    }
+                    // Construir input
+                    let inputHtml = `<input type="${field.type}" id="field-${key}" data-key="${key}" value="${field.value}" ${isReadOnly} placeholder="${placeholder}" ${field.min !== undefined ? 'min="' + field.min + '"' : ''}>`;
+                    
+                    // Campo especial para fecha: input de texto + botón calendario
+                    if (field.isFechaField) {
+                        inputHtml = `
+                            <div style="display: flex; gap: 5px; flex: 1;">
+                                <input type="text" id="field-${key}" data-key="${key}" value="${field.value}" ${isReadOnly} placeholder="DD/MM/AAAA" style="flex: 1;">
+                                <input type="date" id="field-${key}-calendar" style="width: 40px; padding: 5px;" ${isReadOnly}>
+                            </div>
+                        `;
+                    }
+
+                    const html = `
+                        <div class="verification-row field-locked" id="row-field-${key}">
+                            <label for="field-${key}">${field.label}:</label>
+                            ${inputHtml}
+                            <div class="verification-buttons" style="${showButtons}">
+                                ${buttonHtml}
+                            </div>
+                        </div>
+                    `;
+                    verificationForm.innerHTML += html;
+                });
+
+                verificationForm.querySelectorAll('.verification-buttons button').forEach(button => {
+                    button.addEventListener('click', handleVerification);
+                });
+
+                // Sincronizar campo de fecha: texto (escáner) ↔ calendario (manual)
+                const fechaTexto = document.getElementById('field-fechaCaducidad');
+                const fechaCalendario = document.getElementById('field-fechaCaducidad-calendar');
+                
+                if (fechaTexto && fechaCalendario) {
+                    // Cuando se selecciona fecha en calendario → actualizar campo de texto
+                    fechaCalendario.addEventListener('change', function() {
+                        if (this.value) {
+                            const [year, month, day] = this.value.split('-');
+                            fechaTexto.value = `${day}/${month}/${year}`;
+                        }
+                    });
+                    
+                    // Cuando se escribe/escanea en texto → validar formato y actualizar calendario
+                    fechaTexto.addEventListener('input', function() {
+                        const match = this.value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                        if (match) {
+                            const [_, day, month, year] = match;
+                            // Corregido: día y mes en el orden correcto
+                            fechaCalendario.value = `${year}-${month}-${day}`;
+                        }
+                    });
+                }
+
+                // Bloquear todos los campos editables inicialmente (se desbloquearán uno a uno)
+                Object.keys(allFields).forEach(key => {
+                    const field = allFields[key];
+                    const row = document.getElementById(`row-field-${key}`);
+                    if (field.isEditable) {
+                        if (row) {
+                            row.classList.add('field-locked');
+                            const inputs = row.querySelectorAll('input');
+                            inputs.forEach(input => input.setAttribute('readonly', true));
+                            const buttons = row.querySelector('.verification-buttons');
+                            if (buttons) buttons.style.display = 'none';
+                        }
+                    } else {
+                        // Si el campo NO es editable y no es alwaysShow, ocultarlo; si es alwaysShow, mostrarlo como readonly
+                        if (row) {
+                            if (field.alwaysShow) {
+                                // Mostrar como readonly (informativo)
+                                row.classList.add('field-locked');
+                                const inputs = row.querySelectorAll('input');
+                                inputs.forEach(input => input.setAttribute('readonly', true));
+                                const buttons = row.querySelector('.verification-buttons');
+                                if (buttons) buttons.style.display = 'none';
+                            } else {
+                                row.style.display = 'none';
+                            }
+                        }
+                    }
+                });
+            }
+
+            function enableField(index) {
+                const currentKey = fieldOrder[index];
+                if (!currentKey) {
+                    validateCompletion(); 
+                    return;
+                }
+                const currentRow = document.getElementById(`row-field-${currentKey}`);
+                if (currentRow) {
+                    currentRow.classList.remove('field-locked');
+                    const buttons = currentRow.querySelector('.verification-buttons');
+                    const inputs = currentRow.querySelectorAll('input');
+                    // Mostrar botones y permitir edición sólo del campo actual
+                    if (buttons) buttons.style.display = 'flex';
+                    
+                    inputs.forEach(input => {
+                        input.removeAttribute('readonly');
+                        // Bloquear entrada manual hasta confirmar campo anterior
+                        input.addEventListener('focus', function preventFocus(e) {
+                            // Verificar si el campo anterior ya fue confirmado
+                            if (index > 0) {
+                                const prevKey = fieldOrder[index - 1];
+                                if (!validatedFields.has(prevKey)) {
+                                    e.target.blur();
+                                    alert(`Debe confirmar el campo "${allFields[prevKey].label}" antes de continuar.`);
+                                    return;
+                                }
+                            }
+                            // Una vez validado, remover el listener
+                            input.removeEventListener('focus', preventFocus);
+                        });
+                    });
+                    // Enfocar el control adecuado
+                    if (buttons && buttons.style.display !== 'none') {
+                        const focusBtn = buttons.querySelector('.btn-verify') || buttons.querySelector('button');
+                        if (focusBtn) focusBtn.focus();
+                    } else if (inputs.length > 0) {
+                        inputs[0].focus();
+                    }
+                }
+            }
+
+            function validateCompletion() {
+                if (validatedFields.size === fieldOrder.length) {
+                    acceptBtn.disabled = false; // Habilitar botón ACEPTAR
+                }
+            }
+
+            function handleVerification(event) {
+                // event.currentTarget es el botón al que se agregó el listener
+                const button = event.currentTarget || event.target.closest('button');
+                if (!button) return;
+                const action = button.dataset.action;
+                const currentKey = button.dataset.key;
+                const currentRow = document.getElementById(`row-field-${currentKey}`);
+                const inputField = currentRow.querySelector('input');
+                
+                if (action === 'confirm') {
+                    if (!inputField.value) {
+                        alert(`El campo ${allFields[currentKey].label} no puede estar vacío.`);
+                        inputField.focus();
+                        return;
+                    }
+
+                    // Bloquear todos los inputs del campo (puede haber más de uno, como fecha con calendario)
+                    const allInputs = currentRow.querySelectorAll('input');
+                    allInputs.forEach(input => {
+                        input.style.backgroundColor = '#d4edda';
+                        input.setAttribute('readonly', true);
+                    });
+                    
+                    currentRow.classList.add('field-locked');
+                    currentRow.querySelector('.verification-buttons').style.display = 'none';
+                    
+                    validatedFields.add(currentKey); 
+                    currentFieldIndex++;
+                    enableField(currentFieldIndex);
+                    validateCompletion();
+                }
+            }
+
+            // -----------------------------------------------------
+            // FASE 3: GUARDADO Y REDIRECCIONES
+            // -----------------------------------------------------
+           
+
+            document.getElementById('accept-conteo-btn').addEventListener('click', async function() {
+                if (validatedFields.size !== fieldOrder.length) {
+                    alert('¡ERROR! Debe confirmar todos los campos (✅) antes de guardar.');
+                    return;
+                }
+
+                // Deshabilitar el botón para evitar múltiples envíos
+                acceptBtn.disabled = true; // Deshabilitar botón ACEPTAR
+
+                const confirmacion = confirm("¡Confirmación de Conteo! Guardar datos y continuar.");
+
+                if (confirmacion) {
+                    // Recolección de datos finales
+                    const conteoData = {
+                        cuenta: context.cuenta,
+                        ubicacion: ubicacion_escaneada,
+                        sku: document.getElementById('field-sku').value,
+                        loteProveedor: document.getElementById('field-loteProveedor').value,
+                        cantidadFisica: parseInt(document.getElementById('field-cantidadFisica').value),
+                        fechaCaducidad: document.getElementById('field-fechaCaducidad').value,
+                        usuario: localStorage.getItem('currentUser') || 'Sistema'
+                    };
+                    
+                    // Buscar si el lote ingresado coincide con alguno del WMS
+                    const resultadoBusqueda = buscarLoteEnWMS(conteoData.loteProveedor);
+                    conteoData.loteWMS = resultadoBusqueda.lote || '';
+                    conteoData.cantidadWMS = resultadoBusqueda.cantidad || 0;
+                    conteoData.fechaWMS = resultadoBusqueda.fecha || '';
+                    conteoData.lotesWMSDisponibles = lotesDisponiblesWMS; // Enviar todos los lotes del WMS
+                    
+                    console.log('=== DEBUG FECHA ===');
+                    console.log('Fecha Caducidad campo texto:', document.getElementById('field-fechaCaducidad').value);
+                    console.log('Fecha Caducidad en conteoData:', conteoData.fechaCaducidad);
+                    console.log('==================');
+                    
+                    try {
+                        // GUARDAR EN LA BASE DE DATOS usando helper
+                        console.log('Enviando datos al servidor:', conteoData);
+                        const result = await window.appApi.guardarConteo(conteoData);
+                        if (result && result.success) {
+                            // También guardar en localStorage como backup
+                            const dataParaGuardar = {
+                                cuenta: context.cuenta,
+                                ubicacion: ubicacion_escaneada,
+                                sku: conteoData.sku,
+                                descripcion: document.getElementById('field-descripcion').value,
+                                lote: conteoData.loteProveedor,
+                                cantidadFisica: conteoData.cantidadFisica,
+                                fechaCaducidad: conteoData.fechaCaducidad,
+                                pasillo: document.getElementById('field-pasillo').value,
+                                lado: document.getElementById('field-lado').value,
+                                posicionX: document.getElementById('field-posicionX').value,
+                                posicionY: document.getElementById('field-posicionY').value,
+                                fechaHora: new Date().toISOString(),
+                                guardadoEnBD: true
+                            };
+                            
+                            let historial = JSON.parse(localStorage.getItem('historial_conteos') || '[]');
+                            historial.push(dataParaGuardar);
+                            localStorage.setItem('historial_conteos', JSON.stringify(historial));
+
+                            alert('✓ Datos guardados exitosamente.\n\nEscanee el siguiente artículo.');
+                            
+                            // Indicar a P4 que muestre el botón de "Cerrar inventario" cuando regrese
+                            try { localStorage.setItem('show_close_button', '1'); } catch (e) { /* ignore */ }
+                            // Volver a la validación de SKU
+                            window.location.href = '4-validacion-sku.html';
+                        } else {
+                            throw new Error(result && (result.error || result.message) ? (result.error || result.message) : 'Error desconocido al guardar');
+                        }
+                    } catch (error) {
+                        console.error('Error completo:', error);
+                        alert('⚠ Error al guardar en base de datos: ' + error.message + '\n\nVerifique que:\n1. El servidor esté ejecutándose (node server-wms-real.js)\n2. La base de datos local esté configurada\n3. Las credenciales sean correctas');
+                        // Si hubo error, volver a habilitar el botón para intentar de nuevo
+                        acceptBtn.disabled = false;
+                    }
+                } else {
+                    // Si el usuario cancela la confirmación, volver a habilitar el botón
+                    acceptBtn.disabled = false;
+                }
+            });
+
+            document.getElementById('cerrar-btn').addEventListener('click', function() {
+                alert('Cancelando captura. Volviendo a la Ubicación.');
+                // REDIRECCIÓN CLAVE: Vuelve a la Pantalla 3 (Validación de Ubicación)
+                window.location.href = '3-validacion-ubicacion.html';
+            });
+
+            // Botón de exportar a Excel
+            document.getElementById('exportar-excel-btn').addEventListener('click', async function() {
+                try {
+                    const cuenta = context?.cuenta || 'Desconocida';
+                    // Obtener fecha local en formato YYYY-MM-DD
+                    const hoy = new Date();
+                    const year = hoy.getFullYear();
+                    const month = String(hoy.getMonth() + 1).padStart(2, '0');
+                    const day = String(hoy.getDate()).padStart(2, '0');
+                    const fechaHoy = `${year}-${month}-${day}`;
+                    
+                    // Obtener todos los conteos del día
+                    const response = await fetch(`/api/exportar-conteos-dia?cuenta=${encodeURIComponent(cuenta)}&fecha=${fechaHoy}`);
+                    
+                    if (!response.ok) {
+                        throw new Error('Error al obtener datos del servidor');
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (!data.success || !data.registros || data.registros.length === 0) {
+                        alert('No hay registros para exportar en el día de hoy.');
+                        return;
+                    }
+                    
+                    // Crear contenido CSV con todos los registros
+                    const BOM = '\uFEFF'; // BOM para que Excel reconozca UTF-8
+                    let csvContent = BOM;
+                    csvContent += `Comparación de Inventario - ${cuenta}\n`;
+                    csvContent += `Fecha de Exportación,${new Date().toLocaleString('es-MX')}\n`;
+                    csvContent += `Total de Registros,${data.registros.length}\n`;
+                    csvContent += `\n`;
+                    csvContent += `SKU,Descripción,Ubicación,Cantidad WMS,Cantidad Física,Diferencia,Lote WMS,Lote Físico,Fecha Caducidad,% ILA,% IRA\n`;
+                    
+                    // Agregar cada registro
+                    data.registros.forEach(reg => {
+                        const ila = reg.ila || 0;
+                        const ira = reg.ira || 0;
+                        const porcentajeILA = ila > 0 ? '100%' : '0%';
+                        const porcentajeIRA = ila > 0 ? ((ira / ila) * 100).toFixed(2) + '%' : (ira > 0 ? '100%' : '0%');
+                        csvContent += `${reg.sku},"${reg.descripcion}",${reg.ubicacion},${ila},${ira},${reg.diferencia},"${reg.loteWMS || ''}","${reg.lote}","${reg.fechaCaducidad}",${porcentajeILA},${porcentajeIRA}\n`;
+                    });
+                    
+                    // Crear blob y descargar
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    
+                    const fechaArchivo = new Date().toISOString().slice(0,10).replace(/-/g, '');
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', `Inventario_${cuenta}_${fechaArchivo}.csv`);
+                    link.style.visibility = 'hidden';
+                    
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    alert(`✓ Archivo CSV exportado exitosamente\n\nCuenta: ${cuenta}\nRegistros: ${data.registros.length}\nTotal ILA: ${totalILA}\nTotal IRA: ${totalIRA}\nDiferencia: ${totalDif}\n\nPuedes abrirlo con Excel, Google Sheets o cualquier app de hojas de cálculo.`);
+                    
+                } catch (error) {
+                    console.error('Error al exportar:', error);
+                    alert('Error al exportar a Excel: ' + error.message);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3. Validar Ubicación</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <main class="card card--small">
+            <div class="brand">
+                <div class="logo" aria-hidden="true">
+                    <img src="assets/logo.png" alt="Logo" onerror="this.style.display='none'">
+                </div>
+                <div>
+                    <div class="company">Recsolog</div>
+                    <div class="subtitle">Validar Ubicación de Conteo</div>
+                </div>
+            </div>
+
+            <h1 id="main-title">Validar Ubicación de Conteo</h1>
+            <div id="context-info" style="margin-bottom: 20px; font-weight: bold;"></div>
+
+            <p style="text-align: center;">Escanee el ID Ubicación</p>
+
+            <input type="text" id="ubicacion-input" placeholder="Escanear ID Ubicación" autofocus required>
+            
+            <div class="navigation-buttons" style="display: flex; gap: 10px;">
+                <button id="aceptar-btn" class="btn btn-primary" style="flex-grow: 1;">ACEPTAR</button>
+                <button id="cerrar-btn" class="btn btn-danger" style="flex-grow: 1;">CERRAR</button>
+                <button id="editar-btn" class="btn btn-secondary" style="flex-grow: 1;">EDITAR</button>
+            </div>
+        </main>
+    </div>
+    
+    <script src="scripts/app.js"></script>
+    <script>
+        // Aseguramos que el código se ejecute SOLO cuando el HTML esté completamente cargado.
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            const context = JSON.parse(localStorage.getItem('conteo_context'));
+            const ubicacionInput = document.getElementById('ubicacion-input');
+            const aceptarBtn = document.getElementById('aceptar-btn');
+            const cerrarBtn = document.getElementById('cerrar-btn');
+            const editarBtn = document.getElementById('editar-btn');
+
+            if (!context) {
+                alert('Contexto de conteo perdido. Regresando a selección.');
+                window.location.href = '2-seleccion-cuenta.html';
+                return;
+            }
+            document.getElementById('context-info').innerHTML = `Bodega: ${context.bodega} | Cuenta: ${context.cuenta}`;
+
+            async function handleAccept() {
+                const ubicacion = ubicacionInput.value.trim();
+                if (!ubicacion) {
+                    alert('Debe escanear o ingresar una ubicación.');
+                    return;
+                }
+
+                // Deshabilitar botón mientras valida
+                aceptarBtn.disabled = true;
+                aceptarBtn.textContent = 'VALIDANDO...';
+
+                try {
+                    const response = await fetch('/api/validar-ubicacion', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ ubicacion })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        // Ubicación válida - guardar y continuar
+                        localStorage.setItem('conteo_ubicacion', ubicacion);
+                        window.location.href = '4-validacion-sku.html';
+                    } else {
+                        alert('Ubicación no encontrada en el sistema. Verifique el código escaneado.');
+                        aceptarBtn.disabled = false;
+                        aceptarBtn.textContent = 'ACEPTAR';
+                        ubicacionInput.value = '';
+                        ubicacionInput.focus();
+                    }
+                } catch (error) {
+                    alert('Error al validar ubicación: ' + error.message);
+                    aceptarBtn.disabled = false;
+                    aceptarBtn.textContent = 'ACEPTAR';
+                }
+            }
+
+            // --- ASIGNACIÓN DE EVENTOS (Ahora garantizada) ---
+
+            // Activación manual
+            aceptarBtn.addEventListener('click', handleAccept);
+
+            // Activación automática (Escáner)
+            ubicacionInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault(); 
+                    handleAccept();
+                }
+            });
+
+            // Botón CERRAR
+            cerrarBtn.addEventListener('click', function() {
+                // Cierra la sesión de conteo y Regresa al Inicio de Sesión
+                localStorage.clear();
+                window.location.href = '2-seleccion-cuenta.html'; 
+            });
+            // Botón EDITAR - Ver registros guardados
+            editarBtn.addEventListener('click', function() {
+                // Redirigir a la pantalla de edición de registros
+                window.location.href = '7-editar-registros.html';
+            });
+        });
+    </script>
+</body>
+</html>

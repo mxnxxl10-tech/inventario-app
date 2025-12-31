@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inicio de Sesión - Sistema de Inventario</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div class="login-wrapper">
+        <main class="login-card" role="main" aria-labelledby="main-title">
+            <div class="brand">
+                <div class="logo" aria-hidden="true">
+                    <img src="assets/logo.png" alt="Logo" onerror="this.style.display='none'">
+                </div>
+                <div>
+                        <div class="company">Recsolog</div>
+                    <div class="subtitle">Sistema de Inventario</div>
+                </div>
+            </div>
+
+            <h1 id="main-title">Inicio de sesión</h1>
+            <p class="subtitle muted">Acceder como usuario</p>
+
+            <form id="login-form" novalidate>
+                <label for="username" class="muted">Usuario</label>
+                <input type="text" id="username" name="username" placeholder="Usuario" required aria-required="true">
+
+                <label for="password" class="muted">Contraseña</label>
+                <input type="password" id="password" name="password" placeholder="Contraseña" required aria-required="true">
+
+                <button type="submit" class="btn btn-primary btn-centered" aria-label="Iniciar sesión">Iniciar sesión</button>
+            </form>
+
+            <p class="footer-note">Recsolog</p>
+        </main>
+    </div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const submitBtn = document.querySelector('button[type="submit"]');
+            
+            if (!username || !password) {
+                alert('Por favor ingrese usuario y contraseña');
+                return;
+            }
+            
+            // Deshabilitar botón durante la petición
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Validando...';
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Guardar datos del usuario en sessionStorage
+                    sessionStorage.setItem('usuario', JSON.stringify(data.usuario));
+                    
+                    // Redirigir según el rol
+                   // alert(`¡Bienvenido ${data.usuario.nombreCompleto}!`);
+                    window.location.href = '2-seleccion-cuenta.html';
+                } else {
+                    alert(data.error || 'Error al iniciar sesión');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Iniciar sesión';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error de conexión. Verifique que el servidor esté activo.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Iniciar sesión';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar Registros</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <style>
+        .registros-container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .registro-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .registro-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .registro-sku {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #1a237e;
+        }
+        .registro-fecha {
+            font-size: 0.9em;
+            color: #666;
+        }
+        .registro-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .info-label {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 3px;
+        }
+        .info-value {
+            font-weight: 600;
+            color: #333;
+        }
+        .registro-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9em;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .btn-edit {
+            background: #2196F3;
+            color: white;
+        }
+        .btn-edit:hover {
+            background: #1976D2;
+        }
+        .btn-delete {
+            background: #f44336;
+            color: white;
+        }
+        .btn-delete:hover {
+            background: #d32f2f;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        .empty-state-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+        .filters {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        .filter-group input,
+        .filter-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        
+        /* Estilos del Modal de Edición */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .modal-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #1a237e;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-wrapper">
+        <main class="card" style="max-width: 1400px;">
+            <div class="brand">
+                <div class="logo" aria-hidden="true">
+                    <img src="assets/logo.png" alt="Logo" onerror="this.style.display='none'">
+                </div>
+                <div>
+                    <div class="company">Recsolog</div>
+                    <div class="subtitle">Editar Registros de Conteo</div>
+                </div>
+            </div>
+
+            <h1>Registros de Conteo Físico</h1>
+
+            <div class="filters">
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label for="filter-cuenta">Cuenta:</label>
+                        <select id="filter-cuenta">
+                            <option value="">Todas las cuentas</option>
+                            <option value="Montana">Montana</option>
+                            <option value="Fiserv">Fiserv</option>
+                            <option value="Liverpool">Liverpool</option>
+                            <option value="Glexico">Glexico</option>
+                            <option value="Edifier">Edifier</option>
+                            <option value="Odella">Odella</option>
+                            <option value="Filorga">Filorga</option>
+                            <option value="SVR">SVR</option>
+                            <option value="Zaneo">Zaneo</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-fecha-inicio">Fecha Inicio:</label>
+                        <input type="date" id="filter-fecha-inicio">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-fecha-fin">Fecha Fin:</label>
+                        <input type="date" id="filter-fecha-fin">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filter-ubicacion">Ubicación (opcional):</label>
+                        <input type="text" id="filter-ubicacion" placeholder="Ingrese ubicación">
+                    </div>
+                    <div class="filter-group">
+                        <button id="btn-filtrar" class="btn btn-primary" style="width: 100%;">FILTRAR</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="registros-container" class="registros-container">
+                <div class="empty-state">
+                    <div class="empty-state-icon"></div>
+                    <h3>Cargando registros...</h3>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <button onclick="window.location.href='3-validacion-ubicacion.html'" class="btn btn-secondary">
+                    VOLVER
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal de Edición -->
+    <div id="edit-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-title">Editar Registro</div>
+            <div class="form-group">
+                <label>SKU:</label>
+                <input type="text" id="edit-sku" readonly style="background: #f5f5f5;">
+            </div>
+            <div class="form-group">
+                <label>Ubicación:</label>
+                <input type="text" id="edit-ubicacion" readonly style="background: #f5f5f5;">
+            </div>
+            <div class="form-group">
+                <label>Lote Proveedor:</label>
+                <input type="text" id="edit-lote">
+            </div>
+            <div class="form-group">
+                <label>Cantidad Física:</label>
+                <input type="number" id="edit-cantidad" min="0">
+            </div>
+            <div class="form-group">
+                <label>Fecha Caducidad (DD/MM/AAAA):</label>
+                <input type="text" id="edit-fecha" placeholder="01/12/2026">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="cerrarModalEdicion()">CANCELAR</button>
+                <button class="btn btn-primary" onclick="guardarEdicion()">GUARDAR</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts/app.js"></script>
+    <script>
+        const registrosContainer = document.getElementById('registros-container');
+        const filterCuenta = document.getElementById('filter-cuenta');
+        const filterFechaInicio = document.getElementById('filter-fecha-inicio');
+        const filterFechaFin = document.getElementById('filter-fecha-fin');
+        const filterUbicacion = document.getElementById('filter-ubicacion');
+        const btnFiltrar = document.getElementById('btn-filtrar');
+
+        // Establecer fechas por defecto (últimos 7 días)
+        const hoy = new Date();
+        const hace7dias = new Date();
+        hace7dias.setDate(hace7dias.getDate() - 7);
+        
+        filterFechaFin.value = hoy.toISOString().split('T')[0];
+        filterFechaInicio.value = hace7dias.toISOString().split('T')[0];
+
+        async function cargarRegistros() {
+            const cuenta = filterCuenta.value;
+            const fechaInicio = filterFechaInicio.value;
+            const fechaFin = filterFechaFin.value;
+            const ubicacion = filterUbicacion.value.trim();
+
+            if (!fechaInicio || !fechaFin) {
+                alert('Debe seleccionar un rango de fechas');
+                return;
+            }
+
+            if (!cuenta) {
+                alert('Debe seleccionar una cuenta');
+                return;
+            }
+
+            registrosContainer.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><h3>Cargando registros...</h3></div>';
+
+            try {
+                let url = `/api/exportar-conteos-periodo?cuenta=${encodeURIComponent(cuenta)}&fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`;
+                if (ubicacion) {
+                    url += `&ubicacion=${encodeURIComponent(ubicacion)}`;
+                }
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (!data.success || !data.registros || data.registros.length === 0) {
+                    registrosContainer.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon"></div>
+                            <h3>No hay registros</h3>
+                            <p>No se encontraron registros para el periodo y cuenta seleccionados.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                registrosActuales = data.registros; // Guardar para edición
+                mostrarRegistros(data.registros);
+
+            } catch (error) {
+                console.error('Error:', error);
+                registrosContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon"></div>
+                        <h3>Error al cargar registros</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function mostrarRegistros(registros) {
+            registrosContainer.innerHTML = '';
+
+            registros.forEach((reg, index) => {
+                const card = document.createElement('div');
+                card.className = 'registro-card';
+                
+                const fechaFormateada = reg.fecha_conteo || 'N/A';
+                const estado = reg.estado || 'OK';
+                const estadoColor = estado === 'FALTANTE' ? '#f44336' : (estado === 'SOBRANTE' ? '#ff9800' : '#4caf50');
+
+                card.innerHTML = `
+                    <div class="registro-header">
+                        <div class="registro-sku">${reg.sku}</div>
+                        <div class="registro-fecha">${fechaFormateada}</div>
+                    </div>
+                    <div class="registro-info">
+                        <div class="info-item">
+                            <span class="info-label">Descripción</span>
+                            <span class="info-value">${reg.descripcion || 'N/A'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Ubicación</span>
+                            <span class="info-value">${reg.ubicacion || 'N/A'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Lote WMS</span>
+                            <span class="info-value">${reg.lote_wms || 'N/A'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Cantidad WMS</span>
+                            <span class="info-value">${reg.cantidad || 0}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Lote Físico</span>
+                            <span class="info-value">${reg.lote || 'N/A'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Cantidad Física</span>
+                            <span class="info-value">${reg.cantidad_fisica || 0}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Diferencia</span>
+                            <span class="info-value" style="color: ${estadoColor}">${reg.diferencia || 0}</span>
+                        </div>
+                       
+                    </div>
+                    <div class="registro-actions">
+                        <button class="btn-small btn-edit" onclick="editarRegistro(${index})">
+                             EDITAR
+                        </button>
+                        <button class="btn-small btn-delete" onclick="eliminarRegistro(${index}, '${reg.sku}', '${reg.ubicacion}')">
+                             ELIMINAR
+                        </button>
+                    </div>
+                `;
+
+                registrosContainer.appendChild(card);
+            });
+        }
+
+        let registrosActuales = [];
+        let registroEditando = null;
+
+        function editarRegistro(index) {
+            registroEditando = registrosActuales[index];
+            
+            document.getElementById('edit-sku').value = registroEditando.sku;
+            document.getElementById('edit-ubicacion').value = registroEditando.ubicacion;
+            document.getElementById('edit-lote').value = registroEditando.lote || '';
+            document.getElementById('edit-cantidad').value = registroEditando.cantidad_fisica || 0;
+            
+            // Formatear fecha para edición
+            let fechaEditada = '';
+            if (registroEditando.fecha_caducidad) {
+                const fecha = new Date(registroEditando.fecha_caducidad);
+                if (!isNaN(fecha.getTime())) {
+                    const dia = String(fecha.getDate()).padStart(2, '0');
+                    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+                    const anio = fecha.getFullYear();
+                    fechaEditada = `${dia}/${mes}/${anio}`;
+                }
+            }
+            document.getElementById('edit-fecha').value = fechaEditada;
+            
+            document.getElementById('edit-modal').classList.add('active');
+        }
+
+        function cerrarModalEdicion() {
+            document.getElementById('edit-modal').classList.remove('active');
+            registroEditando = null;
+        }
+
+        async function guardarEdicion() {
+            if (!registroEditando) return;
+            
+            const lote = document.getElementById('edit-lote').value.trim();
+            const cantidad = parseInt(document.getElementById('edit-cantidad').value);
+            const fecha = document.getElementById('edit-fecha').value.trim();
+            
+            if (!cantidad || cantidad < 0) {
+                alert('Debe ingresar una cantidad válida');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/actualizar-registro', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        cuenta: filterCuenta.value,
+                        ubicacion: registroEditando.ubicacion,
+                        sku: registroEditando.sku,
+                        loteOriginal: registroEditando.lote || '', // Lote original para encontrar el registro
+                        loteProveedor: lote, // Nuevo lote
+                        cantidadFisica: cantidad,
+                        fechaCaducidad: fecha
+                    })
+                });
+                
+                const result = await response.json();
+                
+                console.log('Resultado de actualización:', result);
+                
+                if (result.success) {
+                    alert('Registro actualizado correctamente');
+                    cerrarModalEdicion();
+                    cargarRegistros(); // Recargar la lista
+                } else {
+                    alert('Error al actualizar: ' + (result.message || result.error));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al actualizar el registro');
+            }
+        }
+
+        async function eliminarRegistro(index, sku, ubicacion) {
+            const confirmacion = confirm(`¿Está seguro de eliminar el registro?\n\nSKU: ${sku}\nUbicación: ${ubicacion}\n\nEsta acción no se puede deshacer.`);
+            
+            if (confirmacion) {
+                alert('Función de eliminación en desarrollo. Por seguridad, use el script SQL limpiar-pruebas.sql para eliminar registros.');
+            }
+        }
+
+        btnFiltrar.addEventListener('click', cargarRegistros);
+
+        // Cargar automáticamente si hay cuenta en el contexto
+        document.addEventListener('DOMContentLoaded', function() {
+            const context = JSON.parse(localStorage.getItem('conteo_context') || '{}');
+            const ubicacion = localStorage.getItem('conteo_ubicacion') || '';
+            
+            if (context.cuenta) {
+                filterCuenta.value = context.cuenta;
+            }
+            
+            if (ubicacion) {
+                filterUbicacion.value = ubicacion;
+            }
+            
+            // Cargar automáticamente si hay cuenta
+            if (context.cuenta) {
+                cargarRegistros();
+            }
+        });
+    </script>
+</body>
+</html>

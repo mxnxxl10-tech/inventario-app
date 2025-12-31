@@ -1,0 +1,161 @@
+===============================================
+SISTEMA DE AUTENTICACIÓN - INVENTARIO APP
+===============================================
+
+✅ IMPLEMENTACIÓN COMPLETADA
+
+El sistema ahora requiere autenticación con roles para acceder a las funcionalidades.
+
+===============================================
+USUARIOS CREADOS POR DEFECTO:
+===============================================
+
+👤 ADMINISTRADOR:
+   Usuario: admin
+   Contraseña: admin123
+   
+   Permisos:
+   ✓ Acceso completo al sistema
+   ✓ Puede realizar conteos físicos
+   ✓ Puede descargar reportes por periodo
+   ✓ Ve el botón "Ver Reportes" en la selección de cuenta
+
+👤 OPERADOR:
+   Usuario: operador
+   Contraseña: oper123
+   
+   Permisos:
+   ✓ Puede realizar conteos físicos
+   ✗ NO puede acceder a reportes
+   ✗ NO ve el botón "Ver Reportes"
+
+===============================================
+FLUJO DE LA APLICACIÓN:
+===============================================
+
+1. LOGIN (1-login.html)
+   - Ingresar usuario y contraseña
+   - El sistema valida contra la base de datos
+   - Si las credenciales son correctas, redirige a selección de cuenta
+   - Si son incorrectas, muestra mensaje de error
+
+2. SELECCIÓN DE CUENTA (2-seleccion-cuenta.html)
+   - Muestra bienvenida con nombre y rol del usuario
+   - Usuario selecciona bodega y cuenta
+   - Solo administradores ven el botón "📊 Ver Reportes"
+   - Botón "Cerrar Sesión" limpia la sesión y regresa al login
+
+3. PROCESO DE CONTEO (3, 4, 5 y B archivos HTML)
+   - Funciona igual que antes
+   - El usuario ya está autenticado en este punto
+
+4. REPORTES (6-reportes.html)
+   - SOLO ACCESIBLE PARA ADMINISTRADORES
+   - Si un operador intenta acceder, es redirigido
+   - Permite descargar reportes por cuenta y periodo de fechas
+
+===============================================
+BASE DE DATOS:
+===============================================
+
+Tabla: USUARIOS
+Campos:
+- id_usuario (INT, PK, IDENTITY)
+- nombre_usuario (VARCHAR(50), UNIQUE)
+- password_hash (VARCHAR(255))
+- nombre_completo (VARCHAR(100))
+- rol (VARCHAR(20)) - 'Administrador' o 'Operador'
+- activo (BIT) - 1 = activo, 0 = inactivo
+- fecha_creacion (DATETIME)
+- fecha_ultimo_acceso (DATETIME)
+
+===============================================
+AGREGAR NUEVOS USUARIOS:
+===============================================
+
+Para agregar más usuarios, ejecutar en SQL Server:
+
+INSERT INTO USUARIOS (nombre_usuario, password_hash, nombre_completo, rol)
+VALUES ('nombre_usuario', 'contraseña', 'Nombre Completo', 'Administrador');
+-- o 'Operador' según el rol deseado
+
+Ejemplo:
+INSERT INTO USUARIOS (nombre_usuario, password_hash, nombre_completo, rol)
+VALUES ('juan', 'pass123', 'Juan Pérez', 'Operador');
+
+===============================================
+DESACTIVAR UN USUARIO:
+===============================================
+
+UPDATE USUARIOS 
+SET activo = 0 
+WHERE nombre_usuario = 'nombre_usuario';
+
+===============================================
+CAMBIAR CONTRASEÑA:
+===============================================
+
+UPDATE USUARIOS 
+SET password_hash = 'nueva_contraseña' 
+WHERE nombre_usuario = 'nombre_usuario';
+
+===============================================
+SEGURIDAD:
+===============================================
+
+⚠️ NOTA IMPORTANTE:
+Las contraseñas actualmente se guardan en texto plano.
+Para un ambiente de producción, se recomienda:
+1. Implementar hash de contraseñas (bcrypt, argon2, etc.)
+2. Usar tokens JWT para sesiones
+3. Implementar HTTPS
+
+===============================================
+ARCHIVOS MODIFICADOS:
+===============================================
+
+✅ server-wms-real.js
+   - Nuevo endpoint: POST /api/login
+   - Valida usuario y contraseña
+   - Retorna información del usuario con rol
+
+✅ 1-login.html
+   - Formulario de autenticación
+   - Validación de credenciales
+   - Guardado de sesión
+
+✅ 2-seleccion-cuenta.html
+   - Verificación de sesión activa
+   - Muestra información del usuario
+   - Botón de reportes solo para admins
+   - Botón de cerrar sesión
+
+✅ 6-reportes.html
+   - Protección de acceso solo para admins
+   - Verificación de rol antes de mostrar contenido
+
+✅ crear-tabla-usuarios.sql
+   - Script SQL para crear tabla USUARIOS
+   - Inserta usuarios por defecto
+
+===============================================
+TESTING:
+===============================================
+
+1. Probar login con admin/admin123 ✓
+2. Verificar que ve el botón de reportes ✓
+3. Probar acceso a reportes ✓
+4. Cerrar sesión ✓
+5. Probar login con operador/oper123 ✓
+6. Verificar que NO ve el botón de reportes ✓
+7. Intentar acceder directamente a 6-reportes.html ✓
+8. Verificar que es redirigido ✓
+
+===============================================
+CONTACTO Y SOPORTE:
+===============================================
+
+Para cualquier duda o problema, contactar al
+administrador del sistema.
+
+===============================================
